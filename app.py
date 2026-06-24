@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import sqlite3
 from datetime import date
 
 # ---------------- PAGE SETTINGS ----------------
@@ -10,39 +11,75 @@ st.set_page_config(
     layout="wide"
 )
 
-# ---------------- CUSTOM DESIGN ----------------
+# ---------------- DATABASE ----------------
+conn = sqlite3.connect("expenses.db", check_same_thread=False)
+cursor = conn.cursor()
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS expenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    expense_date TEXT NOT NULL,
+    amount REAL NOT NULL
+)
+""")
+conn.commit()
+
+
+def add_expense(name, category, expense_date, amount):
+    cursor.execute(
+        """
+        INSERT INTO expenses (name, category, expense_date, amount)
+        VALUES (?, ?, ?, ?)
+        """,
+        (name, category, str(expense_date), amount)
+    )
+    conn.commit()
+
+
+def get_expenses():
+    return pd.read_sql_query(
+        "SELECT id, name, category, expense_date, amount FROM expenses ORDER BY expense_date DESC, id DESC",
+        conn
+    )
+
+
+def delete_expense(expense_id):
+    cursor.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
+    conn.commit()
+
+
+def clear_all_expenses():
+    cursor.execute("DELETE FROM expenses")
+    conn.commit()
+
+
+# ---------------- DESIGN ----------------
 st.markdown("""
 <style>
-    .main-title {
-        text-align: center;
-        font-size: 42px;
-        font-weight: bold;
-        margin-bottom: 0px;
-    }
-
-    .sub-title {
-        text-align: center;
-        font-size: 18px;
-        margin-bottom: 30px;
-    }
-
-    div[data-testid="stMetric"] {
-        padding: 15px;
-        border-radius: 12px;
-        border: 1px solid #dddddd;
-    }
+.main-title {
+    text-align: center;
+    font-size: 42px;
+    font-weight: bold;
+    margin-bottom: 0;
+}
+.sub-title {
+    text-align: center;
+    font-size: 18px;
+    margin-bottom: 30px;
+}
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<p class="main-title">💰 Smart Expense Tracker</p>', unsafe_allow_html=True)
 st.markdown(
-    '<p class="sub-title">Track your spending, understand your money</p>',
+    '<p class="main-title">💰 Smart Expense Tracker</p>',
     unsafe_allow_html=True
 )
-
-# ---------------- SESSION STORAGE ----------------
-if "expenses" not in st.session_state:
-    st.session_state.expenses = []
+st.markdown(
+    '<p class="sub-title">Your expenses are saved automatically</p>',
+    unsafe_allow_html=True
+)
 
 categories = [
     "Food",
@@ -78,28 +115,21 @@ with st.expander("➕ Add New Expense", expanded=True):
 
     if st.button("Add Expense", use_container_width=True):
         if name.strip() != "" and amount > 0:
-            st.session_state.expenses.append(
-                {
-                    "name": name.strip(),
-                    "category": category,
-                    "date": expense_date,
-                    "amount": amount
-                }
-            )
-            st.success("Expense added successfully!")
+            add_expense(name.strip(), category, expense_date, amount)
+            st.success("Expense saved successfully!")
             st.rerun()
         else:
-            st.warning("Please enter an expense name and amount greater than 0.")
+            st.warning("Enter an expense name and amount greater than 0.")
 
-# ---------------- NO EXPENSES ----------------
-if len(st.session_state.expenses) == 0:
-    st.info("No expenses added yet. Add your first expense above.")
+# ---------------- LOAD EXPENSES ----------------
+df = get_expenses()
 
-# ---------------- EXPENSE DASHBOARD ----------------
+if len(df) == 0:
+    st.info("No expenses saved yet. Add your first expense above.")
+
 else:
-    df = pd.DataFrame(st.session_state.expenses)
-    df["date"] = pd.to_datetime(df["date"])
-    df["month"] = df["date"].dt.strftime("%B %Y")
+    df["expense_date"] = pd.to_datetime(df["expense_date"])
+    df["month"] = df["expense_date"].dt.strftime("%B %Y")
 
     st.divider()
     st.subheader("📊 Expense Dashboard")
@@ -112,14 +142,12 @@ else:
             df["month"].unique(),
             reverse=True
         )
-
         selected_month = st.selectbox("Filter by month", month_options)
 
     with filter2:
         category_options = ["All categories"] + sorted(
             df["category"].unique()
         )
-
         selected_category = st.selectbox(
             "Filter by category",
             category_options
@@ -152,43 +180,43 @@ else:
             )
         ]
 
-    # ---------------- SUMMARY CARDS ----------------
+    # ---------------- SUMMARY ----------------
     total_expense = filtered_df["amount"].sum()
     expense_count = len(filtered_df)
-
-    if expense_count > 0:
-        highest_expense = filtered_df["amount"].max()
-    else:
-        highest_expense = 0
+    highest_expense = (
+        filtered_df["amount"].max()
+        if expense_count > 0
+        else 0
+    )
 
     card1, card2, card3 = st.columns(3)
+    card1.metric("Total Expense", f"₹{total_expense:.2f}")
+    card2.metric("Number of Expenses", expense_count)
+    card3.metric("Highest Expense", f"₹{highest_expense:.2f}")
 
-    with card1:
-        st.metric("Total Expense", f"₹{total_expense:.2f}")
-
-    with card2:
-        st.metric("Number of Expenses", expense_count)
-
-    with card3:
-        st.metric("Highest Expense", f"₹{highest_expense:.2f}")
-
-    # ---------------- EXPENSE TABLE ----------------
+    # ---------------- TABLE ----------------
     st.subheader("🧾 Your Expenses")
 
     display_df = filtered_df[
-        ["name", "category", "date", "amount"]
+        ["id", "name", "category", "expense_date", "amount"]
     ].copy()
 
-    display_df["date"] = display_df["date"].dt.strftime("%d-%m-%Y")
+    display_df["expense_date"] = display_df["expense_date"].dt.strftime(
+        "%d-%m-%Y"
+    )
     display_df["amount"] = display_df["amount"].map(
         lambda value: f"₹{value:.2f}"
     )
 
-    st.dataframe(display_df, use_container_width=True)
+    st.dataframe(
+        display_df.rename(columns={"expense_date": "date"}),
+        use_container_width=True,
+        hide_index=True
+    )
 
     # ---------------- DOWNLOAD CSV ----------------
     csv_data = filtered_df[
-        ["name", "category", "date", "amount"]
+        ["name", "category", "expense_date", "amount"]
     ].to_csv(index=False).encode("utf-8")
 
     st.download_button(
@@ -204,69 +232,55 @@ else:
         st.subheader("📈 Spending Analysis")
 
         chart1, chart2 = st.columns(2)
-
-        category_total = filtered_df.groupby(
-            "category"
-        )["amount"].sum()
+        category_total = filtered_df.groupby("category")["amount"].sum()
 
         with chart1:
             st.write("### Category Distribution")
-
             fig1, ax1 = plt.subplots()
-
             ax1.pie(
                 category_total,
                 labels=category_total.index,
                 autopct="%1.1f%%",
                 startangle=90
             )
-
             ax1.axis("equal")
             st.pyplot(fig1)
 
         with chart2:
             st.write("### Category Spending")
-
             fig2, ax2 = plt.subplots()
-
-            ax2.bar(
-                category_total.index,
-                category_total.values
-            )
-
+            ax2.bar(category_total.index, category_total.values)
             ax2.set_xlabel("Category")
             ax2.set_ylabel("Amount (₹)")
             plt.xticks(rotation=45)
-
             st.pyplot(fig2)
 
-    # ---------------- DELETE EXPENSE ----------------
+    # ---------------- DELETE ----------------
     st.divider()
     st.subheader("🗑 Delete an Expense")
 
-    delete_options = [
-        f"{index + 1}. {expense['name']} | "
-        f"{expense['category']} | "
-        f"₹{expense['amount']:.2f}"
-        for index, expense in enumerate(st.session_state.expenses)
-    ]
+    delete_options = {
+        f"{row['name']} | {row['category']} | "
+        f"₹{row['amount']:.2f} | "
+        f"{row['expense_date'].strftime('%d-%m-%Y')}": row["id"]
+        for _, row in df.iterrows()
+    }
 
-    selected_expense = st.selectbox(
+    selected_label = st.selectbox(
         "Choose expense to delete",
-        delete_options
+        list(delete_options.keys())
     )
 
     delete_col, clear_col = st.columns(2)
 
     with delete_col:
         if st.button("Delete Selected Expense", use_container_width=True):
-            selected_index = delete_options.index(selected_expense)
-            deleted = st.session_state.expenses.pop(selected_index)
-            st.success(f"Deleted: {deleted['name']}")
+            delete_expense(delete_options[selected_label])
+            st.success("Expense deleted.")
             st.rerun()
 
     with clear_col:
         if st.button("Clear All Expenses", use_container_width=True):
-            st.session_state.expenses = []
+            clear_all_expenses()
             st.success("All expenses cleared.")
             st.rerun()
