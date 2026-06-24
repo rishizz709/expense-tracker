@@ -83,6 +83,11 @@ CREATE TABLE IF NOT EXISTS expenses (
 )
 """)
 
+# Add notes column if this database was created by an older version
+try:
+    cursor.execute("ALTER TABLE expenses ADD COLUMN notes TEXT")
+except sqlite3.OperationalError:
+    pass
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS settings (
     setting_name TEXT PRIMARY KEY,
