@@ -15,7 +15,7 @@ st.set_page_config(
 )
 
 # =================================================
-# DARK MOBILE-APP STYLE
+# DARK PREMIUM STYLE
 # =================================================
 st.markdown("""
 <style>
@@ -42,13 +42,6 @@ st.markdown("""
         border-right: 1px solid rgba(148, 163, 184, 0.16);
     }
 
-    section[data-testid="stSidebar"] h1,
-    section[data-testid="stSidebar"] h2,
-    section[data-testid="stSidebar"] h3,
-    section[data-testid="stSidebar"] p {
-        color: #ffffff !important;
-    }
-
     .app-title {
         font-size: 42px;
         font-weight: 800;
@@ -69,6 +62,14 @@ st.markdown("""
         padding: 18px;
         margin-bottom: 12px;
         box-shadow: 0 12px 28px rgba(0, 0, 0, 0.20);
+    }
+
+    .creator-card {
+        background: linear-gradient(135deg, rgba(37, 99, 235, 0.18), rgba(124, 58, 237, 0.18));
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 18px;
+        padding: 20px;
+        margin-top: 12px;
     }
 
     div[data-testid="stMetric"] {
@@ -120,6 +121,12 @@ st.markdown("""
         color: #aab7cf !important;
         font-size: 14px;
     }
+
+    .insight-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 6px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -140,7 +147,6 @@ CREATE TABLE IF NOT EXISTS expenses (
 )
 """)
 
-# Supports database created by old versions of the app
 try:
     cursor.execute("ALTER TABLE expenses ADD COLUMN notes TEXT")
 except sqlite3.OperationalError:
@@ -205,11 +211,7 @@ def get_budget():
         "SELECT setting_value FROM settings WHERE setting_name = 'monthly_budget'"
     )
     result = cursor.fetchone()
-
-    if result:
-        return float(result[0])
-
-    return 5000.0
+    return float(result[0]) if result else 5000.0
 
 
 def save_budget(budget):
@@ -227,15 +229,9 @@ def save_budget(budget):
 # HELPERS
 # =================================================
 categories = [
-    "Food",
-    "Travel",
-    "Shopping",
-    "Bills",
-    "Entertainment",
-    "Health",
-    "Education",
-    "Rent",
-    "Other"
+    "Food", "Travel", "Shopping", "Bills",
+    "Entertainment", "Health", "Education",
+    "Rent", "Other"
 ]
 
 category_icons = {
@@ -257,6 +253,8 @@ def prepare_data():
     if not data.empty:
         data["expense_date"] = pd.to_datetime(data["expense_date"])
         data["month"] = data["expense_date"].dt.strftime("%B %Y")
+        data["year_month"] = data["expense_date"].dt.to_period("M").astype(str)
+        data["week"] = data["expense_date"].dt.isocalendar().week.astype(int)
 
     return data
 
@@ -293,8 +291,72 @@ def show_expense_table(data):
     )
 
 
+def show_ai_insights(data, budget):
+    if data.empty:
+        return
+
+    current_month = pd.Timestamp.today().strftime("%B %Y")
+    current_df = data[data["month"] == current_month]
+    current_total = current_df["amount"].sum()
+
+    category_total = current_df.groupby("category")["amount"].sum()
+
+    st.subheader("✨ AI Spending Insights")
+
+    if current_df.empty:
+        st.info("Add expenses in the current month to get personalized insights.")
+        return
+
+    top_category = category_total.idxmax()
+    top_amount = category_total.max()
+    top_percentage = (top_amount / current_total) * 100 if current_total > 0 else 0
+
+    budget_left = budget - current_total
+
+    i1, i2, i3 = st.columns(3)
+
+    with i1:
+        st.markdown(f"""
+        <div class="glass-card">
+            <div class="insight-title">🔍 Spending Pattern</div>
+            <p class="small-muted">
+                <b>{top_category}</b> is your biggest category this month.
+                It takes {top_percentage:.0f}% of your spending.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with i2:
+        if budget_left >= 0:
+            message = f"You still have ₹{budget_left:,.2f} left in your monthly budget."
+            title = "💡 Budget Tip"
+        else:
+            message = f"You are ₹{abs(budget_left):,.2f} above your budget. Reduce optional spending."
+            title = "⚠️ Budget Alert"
+
+        st.markdown(f"""
+        <div class="glass-card">
+            <div class="insight-title">{title}</div>
+            <p class="small-muted">{message}</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with i3:
+        suggested_saving = top_amount * 0.10
+
+        st.markdown(f"""
+        <div class="glass-card">
+            <div class="insight-title">🎯 Savings Suggestion</div>
+            <p class="small-muted">
+                Reducing <b>{top_category}</b> spending by just 10% could save about
+                ₹{suggested_saving:,.2f} this month.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+
 # =================================================
-# SIDEBAR NAVIGATION
+# SIDEBAR
 # =================================================
 with st.sidebar:
     st.markdown("## 💸 ExpenseFlow")
@@ -302,7 +364,13 @@ with st.sidebar:
 
     page = st.radio(
         "Navigation",
-        ["📊 Dashboard", "➕ Add Expense", "🧾 Expenses", "📈 Reports", "⚙️ Settings"],
+        [
+            "📊 Dashboard",
+            "➕ Add Expense",
+            "🧾 Expenses",
+            "📈 Reports",
+            "⚙️ Settings"
+        ],
         label_visibility="collapsed"
     )
 
@@ -321,104 +389,119 @@ monthly_budget = get_budget()
 if page == "📊 Dashboard":
     show_header(
         "Good to see you 👋",
-        "Here is a quick view of your spending."
+        "A complete view of your money and spending habits."
     )
-
-    current_month = pd.Timestamp.today().strftime("%B %Y")
 
     if df.empty:
         st.markdown("""
         <div class="glass-card">
             <h3>Start tracking your money</h3>
             <p class="small-muted">
-                Add your first expense from the sidebar to see your dashboard.
+                Add your first expense from the sidebar to unlock your dashboard,
+                reports, and smart insights.
             </p>
         </div>
         """, unsafe_allow_html=True)
 
     else:
-        current_month_df = df[df["month"] == current_month]
-        current_month_total = current_month_df["amount"].sum()
-        remaining = monthly_budget - current_month_total
+        current_month = pd.Timestamp.today().strftime("%B %Y")
+        current_df = df[df["month"] == current_month]
+        current_total = current_df["amount"].sum()
+        remaining = monthly_budget - current_total
+
+        previous_month_period = (
+            pd.Timestamp.today().to_period("M") - 1
+        ).strftime("%Y-%m")
+
+        previous_total = df[
+            df["year_month"] == previous_month_period
+        ]["amount"].sum()
+
+        if previous_total > 0:
+            month_change = (
+                (current_total - previous_total) / previous_total
+            ) * 100
+            month_change_text = f"{month_change:+.1f}% vs last month"
+        else:
+            month_change_text = "No previous month data"
 
         total_all = df["amount"].sum()
         transaction_count = len(df)
-        highest = df["amount"].max()
 
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("This Month", f"₹{current_month_total:,.2f}")
+        c1.metric("This Month", f"₹{current_total:,.2f}", month_change_text)
         c2.metric("Monthly Budget", f"₹{monthly_budget:,.2f}")
         c3.metric("Remaining", f"₹{remaining:,.2f}")
-        c4.metric("Transactions", transaction_count)
+        c4.metric("Total Transactions", transaction_count)
 
         st.divider()
         st.subheader("🎯 Budget Status")
 
         if monthly_budget > 0:
-            budget_progress = min(current_month_total / monthly_budget, 1.0)
+            budget_progress = min(current_total / monthly_budget, 1.0)
             st.progress(budget_progress)
 
-            if current_month_total >= monthly_budget:
+            if current_total >= monthly_budget:
                 st.error("You have crossed your monthly budget.")
-            elif current_month_total >= monthly_budget * 0.8:
+            elif current_total >= monthly_budget * 0.8:
                 st.warning("You have used more than 80% of your budget.")
             else:
                 st.success("Your spending is within budget.")
 
         st.divider()
-        st.subheader("🧠 Smart Insights")
+        show_ai_insights(df, monthly_budget)
 
-        category_total = current_month_df.groupby("category")["amount"].sum()
+        st.divider()
+        left, right = st.columns(2)
 
-        insight1, insight2, insight3 = st.columns(3)
+        with left:
+            st.subheader("🏆 Top Categories")
 
-        with insight1:
-            if not category_total.empty:
-                top_category = category_total.idxmax()
-                top_amount = category_total.max()
-                st.markdown(f"""
-                <div class="glass-card">
-                    <h4>{category_icons.get(top_category, '📦')} Top Category</h4>
-                    <p class="small-muted">
-                        You spent the most on <b>{top_category}</b>: ₹{top_amount:,.2f}
-                    </p>
-                </div>
-                """, unsafe_allow_html=True)
+            if not current_df.empty:
+                top_categories = current_df.groupby(
+                    "category"
+                )["amount"].sum().sort_values(ascending=False).head(3)
 
-        with insight2:
-            st.markdown(f"""
-            <div class="glass-card">
-                <h4>💳 Biggest Expense</h4>
-                <p class="small-muted">
-                    Your highest recorded expense is ₹{highest:,.2f}
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
+                for category, value in top_categories.items():
+                    st.markdown(f"""
+                    <div class="glass-card">
+                        <b>{category_icons.get(category, '📦')} {category}</b>
+                        <br>
+                        <span class="small-muted">₹{value:,.2f} spent this month</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("No expenses added this month.")
 
-        with insight3:
-            daily_average = (
-                current_month_total / current_month_df["expense_date"].nunique()
-                if not current_month_df.empty
-                else 0
-            )
+        with right:
+            st.subheader("📅 Weekly Spending")
 
-            st.markdown(f"""
-            <div class="glass-card">
-                <h4>📅 Daily Average</h4>
-                <p class="small-muted">
-                    You spend around ₹{daily_average:,.2f} per active day this month.
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
+            if not current_df.empty:
+                weekly_total = current_df.groupby("week")["amount"].sum()
+
+                fig, ax = plt.subplots()
+                fig.patch.set_facecolor("#111827")
+                ax.set_facecolor("#111827")
+
+                ax.bar(
+                    [f"Week {week}" for week in weekly_total.index],
+                    weekly_total.values
+                )
+
+                ax.set_ylabel("Amount (₹)", color="white")
+                ax.tick_params(colors="white")
+                plt.xticks(rotation=25)
+
+                st.pyplot(fig)
+            else:
+                st.info("No weekly spending data yet.")
 
         st.divider()
         st.subheader("🕒 Recent Transactions")
-
-        recent_df = df.head(5)
-        show_expense_table(recent_df)
+        show_expense_table(df.head(5))
 
 # =================================================
-# ADD EXPENSE PAGE
+# ADD EXPENSE
 # =================================================
 elif page == "➕ Add Expense":
     show_header(
@@ -432,19 +515,11 @@ elif page == "➕ Add Expense":
         col1, col2 = st.columns(2)
 
         with col1:
-            name = st.text_input(
-                "Expense name",
-                placeholder="Example: Coffee"
-            )
-
+            name = st.text_input("Expense name", placeholder="Example: Coffee")
             category = st.selectbox("Category", categories)
 
         with col2:
-            expense_date = st.date_input(
-                "Expense date",
-                value=date.today()
-            )
-
+            expense_date = st.date_input("Expense date", value=date.today())
             amount = st.number_input(
                 "Amount (₹)",
                 min_value=0.0,
@@ -478,12 +553,12 @@ elif page == "➕ Add Expense":
     st.markdown('</div>', unsafe_allow_html=True)
 
 # =================================================
-# EXPENSES PAGE
+# EXPENSES
 # =================================================
 elif page == "🧾 Expenses":
     show_header(
         "All Expenses",
-        "Search, filter, edit, delete, and download your transactions."
+        "Search, filter, edit, delete, and download transactions."
     )
 
     if df.empty:
@@ -662,7 +737,7 @@ elif page == "🧾 Expenses":
                 st.rerun()
 
 # =================================================
-# REPORTS PAGE
+# REPORTS
 # =================================================
 elif page == "📈 Reports":
     show_header(
@@ -769,12 +844,12 @@ elif page == "📈 Reports":
             st.pyplot(fig3)
 
 # =================================================
-# SETTINGS PAGE
+# SETTINGS
 # =================================================
 elif page == "⚙️ Settings":
     show_header(
         "Settings",
-        "Manage your budget and app data."
+        "Manage your budget and app information."
     )
 
     st.subheader("🎯 Monthly Budget")
@@ -792,17 +867,37 @@ elif page == "⚙️ Settings":
         st.rerun()
 
     st.divider()
-    st.subheader("ℹ️ About")
+    st.subheader("👨‍💻 Creator")
+
+    st.markdown("""
+    <div class="creator-card">
+        <h3>Made by Rishi</h3>
+        <p class="small-muted">
+            ExpenseFlow is a personal finance dashboard built using Python,
+            Streamlit, SQLite, Pandas, and Matplotlib.
+        </p>
+        <p>
+            🔗 GitHub:
+            <a href="https://github.com/rishizz709" target="_blank"
+            style="color:#93c5fd; font-weight:bold;">
+            github.com/rishizz709
+            </a>
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.divider()
+    st.subheader("ℹ️ App Information")
 
     st.markdown("""
     <div class="glass-card">
         <p class="small-muted">
-            ExpenseFlow stores your data using SQLite.
-            Your expenses are saved locally while testing on your computer.
-            Free cloud hosting may reset SQLite data after a restart or redeploy.
+            ExpenseFlow stores expenses using SQLite.
+            It works well locally. On free cloud hosting, SQLite files can reset
+            after restart or redeployment.
         </p>
     </div>
     """, unsafe_allow_html=True)
 
 st.divider()
-st.caption("ExpenseFlow • Built with Python, Streamlit, SQLite, Pandas and Matplotlib")
+st.caption("ExpenseFlow • Made by Rishi • Built with Python and Streamlit")
