@@ -4,71 +4,110 @@ import matplotlib.pyplot as plt
 import sqlite3
 from datetime import date
 
-# ---------------- PAGE ----------------
+# -------------------------------------------------
+# PAGE SETTINGS
+# -------------------------------------------------
 st.set_page_config(
     page_title="Smart Expense Tracker",
     page_icon="💸",
     layout="wide"
 )
 
-# ---------------- STYLE ----------------
+# -------------------------------------------------
+# DARK PREMIUM DESIGN
+# -------------------------------------------------
 st.markdown("""
 <style>
     .stApp {
-        background: linear-gradient(135deg, #0f172a, #172554, #111827);
-        color: white;
+        background:
+            radial-gradient(circle at 15% 10%, rgba(59, 130, 246, 0.20), transparent 28%),
+            radial-gradient(circle at 85% 15%, rgba(168, 85, 247, 0.18), transparent 30%),
+            linear-gradient(135deg, #060b18 0%, #0b1224 45%, #111827 100%);
+        color: #f8fafc;
     }
 
-    h1, h2, h3, p, label {
+    .block-container {
+        max-width: 1250px;
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+    }
+
+    h1, h2, h3, h4, p, label {
         color: #f8fafc !important;
     }
 
     .hero {
         text-align: center;
-        padding: 18px 0 8px 0;
+        padding: 18px 0 24px 0;
     }
 
     .hero h1 {
         font-size: 48px;
-        margin-bottom: 0;
+        font-weight: 800;
+        margin-bottom: 6px;
+        letter-spacing: -1px;
     }
 
     .hero p {
-        color: #cbd5e1 !important;
+        color: #aab7cf !important;
         font-size: 18px;
     }
 
     div[data-testid="stMetric"] {
-        background: rgba(255, 255, 255, 0.10);
-        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(20, 30, 55, 0.78);
+        border: 1px solid rgba(148, 163, 184, 0.20);
+        border-radius: 18px;
         padding: 18px;
-        border-radius: 16px;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
     }
 
     div[data-testid="stMetricLabel"] {
-        color: #cbd5e1 !important;
+        color: #aab7cf !important;
     }
 
     div[data-testid="stMetricValue"] {
-        color: white !important;
+        color: #ffffff !important;
     }
 
     div.stButton > button {
-        border-radius: 10px;
-        font-weight: bold;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        color: white;
         border: none;
+        border-radius: 10px;
+        font-weight: 700;
         padding: 10px 18px;
     }
 
-    .block-container {
-        padding-top: 2rem;
-        padding-bottom: 3rem;
-        max-width: 1200px;
+    div.stButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 20px rgba(59, 130, 246, 0.35);
+    }
+
+    div[data-testid="stExpander"] {
+        background: rgba(20, 30, 55, 0.60);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 16px;
+    }
+
+    div[data-testid="stDataFrame"] {
+        border-radius: 14px;
+        overflow: hidden;
+    }
+
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0b1224, #111827);
+        border-right: 1px solid rgba(148, 163, 184, 0.16);
+    }
+
+    hr {
+        border-color: rgba(148, 163, 184, 0.20);
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- DATABASE ----------------
+# -------------------------------------------------
+# DATABASE
+# -------------------------------------------------
 conn = sqlite3.connect("expenses.db", check_same_thread=False)
 cursor = conn.cursor()
 
@@ -83,11 +122,12 @@ CREATE TABLE IF NOT EXISTS expenses (
 )
 """)
 
-# Add notes column if this database was created by an older version
+# Fix old database versions that do not have notes column
 try:
     cursor.execute("ALTER TABLE expenses ADD COLUMN notes TEXT")
 except sqlite3.OperationalError:
     pass
+
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS settings (
     setting_name TEXT PRIMARY KEY,
@@ -120,11 +160,6 @@ def get_expenses():
     )
 
 
-def delete_expense(expense_id):
-    cursor.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
-    conn.commit()
-
-
 def update_expense(expense_id, name, category, expense_date, amount, notes):
     cursor.execute(
         """
@@ -134,6 +169,11 @@ def update_expense(expense_id, name, category, expense_date, amount, notes):
         """,
         (name, category, str(expense_date), amount, notes, expense_id)
     )
+    conn.commit()
+
+
+def delete_expense(expense_id):
+    cursor.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
     conn.commit()
 
 
@@ -147,11 +187,7 @@ def get_budget():
         "SELECT setting_value FROM settings WHERE setting_name = 'monthly_budget'"
     )
     result = cursor.fetchone()
-
-    if result:
-        return float(result[0])
-
-    return 5000.0
+    return float(result[0]) if result else 5000.0
 
 
 def save_budget(budget):
@@ -165,27 +201,25 @@ def save_budget(budget):
     conn.commit()
 
 
-# ---------------- HEADER ----------------
+# -------------------------------------------------
+# HEADER
+# -------------------------------------------------
 st.markdown("""
 <div class="hero">
     <h1>💸 Smart Expense Tracker</h1>
-    <p>Track spending. Control your budget. Build better money habits.</p>
+    <p>Your personal finance dashboard — clear, simple, and powerful.</p>
 </div>
 """, unsafe_allow_html=True)
 
 categories = [
-    "Food",
-    "Travel",
-    "Shopping",
-    "Bills",
-    "Entertainment",
-    "Health",
-    "Education",
-    "Rent",
-    "Other"
+    "Food", "Travel", "Shopping", "Bills",
+    "Entertainment", "Health", "Education",
+    "Rent", "Other"
 ]
 
-# ---------------- SIDEBAR ----------------
+# -------------------------------------------------
+# SIDEBAR SETTINGS
+# -------------------------------------------------
 with st.sidebar:
     st.header("⚙️ Settings")
 
@@ -203,9 +237,11 @@ with st.sidebar:
         st.success("Budget saved!")
 
     st.divider()
-    st.caption("Your expense data is stored in SQLite.")
+    st.caption("Expenses are saved in SQLite database.")
 
-# ---------------- ADD EXPENSE ----------------
+# -------------------------------------------------
+# ADD EXPENSE
+# -------------------------------------------------
 with st.expander("➕ Add New Expense", expanded=True):
     col1, col2, col3 = st.columns(3)
 
@@ -248,7 +284,9 @@ with st.expander("➕ Add New Expense", expanded=True):
         else:
             st.warning("Enter an expense name and amount greater than 0.")
 
-# ---------------- LOAD DATA ----------------
+# -------------------------------------------------
+# LOAD EXPENSES
+# -------------------------------------------------
 df = get_expenses()
 
 if df.empty:
@@ -258,7 +296,9 @@ else:
     df["expense_date"] = pd.to_datetime(df["expense_date"])
     df["month"] = df["expense_date"].dt.strftime("%B %Y")
 
-    # ---------------- FILTERS ----------------
+    # -------------------------------------------------
+    # FILTERS
+    # -------------------------------------------------
     st.divider()
     st.subheader("🔎 Filters")
 
@@ -275,7 +315,10 @@ else:
         category_options = ["All categories"] + sorted(
             df["category"].unique()
         )
-        selected_category = st.selectbox("Category filter", category_options)
+        selected_category = st.selectbox(
+            "Category filter",
+            category_options
+        )
 
     with f3:
         search_text = st.text_input(
@@ -296,7 +339,7 @@ else:
         ]
 
     if search_text.strip():
-        search_mask = (
+        filtered_df = filtered_df[
             filtered_df["name"].str.contains(
                 search_text,
                 case=False,
@@ -308,13 +351,15 @@ else:
                 case=False,
                 na=False
             )
-        )
-        filtered_df = filtered_df[search_mask]
+        ]
 
-    # ---------------- CURRENT MONTH BUDGET ----------------
+    # -------------------------------------------------
+    # MONTHLY BUDGET
+    # -------------------------------------------------
     current_month = pd.Timestamp.today().strftime("%B %Y")
-    current_month_df = df[df["month"] == current_month]
-    current_month_total = current_month_df["amount"].sum()
+    current_month_total = df[
+        df["month"] == current_month
+    ]["amount"].sum()
 
     remaining = monthly_budget - current_month_total
 
@@ -327,8 +372,7 @@ else:
     b3.metric("Remaining", f"₹{remaining:,.2f}")
 
     if monthly_budget > 0:
-        progress = min(current_month_total / monthly_budget, 1.0)
-        st.progress(progress)
+        st.progress(min(current_month_total / monthly_budget, 1.0))
 
         if current_month_total >= monthly_budget:
             st.error("Budget exceeded. Reduce spending this month.")
@@ -337,13 +381,16 @@ else:
         else:
             st.success("You are within your monthly budget.")
 
-    # ---------------- DASHBOARD ----------------
+    # -------------------------------------------------
+    # DASHBOARD CARDS
+    # -------------------------------------------------
     st.divider()
     st.subheader("📊 Dashboard")
 
     total_expense = filtered_df["amount"].sum()
     expense_count = len(filtered_df)
     highest_expense = filtered_df["amount"].max() if expense_count else 0
+
     daily_average = (
         total_expense / filtered_df["expense_date"].nunique()
         if expense_count else 0
@@ -355,7 +402,9 @@ else:
     m3.metric("Highest Expense", f"₹{highest_expense:,.2f}")
     m4.metric("Daily Average", f"₹{daily_average:,.2f}")
 
-    # ---------------- TABLE ----------------
+    # -------------------------------------------------
+    # EXPENSE TABLE
+    # -------------------------------------------------
     st.divider()
     st.subheader("🧾 Expenses")
 
@@ -364,7 +413,9 @@ else:
     ].copy()
 
     table_df["expense_date"] = table_df["expense_date"].dt.strftime("%d-%m-%Y")
-    table_df["amount"] = table_df["amount"].map(lambda x: f"₹{x:,.2f}")
+    table_df["amount"] = table_df["amount"].map(
+        lambda value: f"₹{value:,.2f}"
+    )
 
     st.dataframe(
         table_df.rename(columns={"expense_date": "date"}),
@@ -383,34 +434,50 @@ else:
         mime="text/csv"
     )
 
-    # ---------------- CHARTS ----------------
+    # -------------------------------------------------
+    # CHARTS
+    # -------------------------------------------------
     if not filtered_df.empty:
         st.divider()
         st.subheader("📈 Spending Analysis")
 
-        category_total = filtered_df.groupby("category")["amount"].sum()
+        category_total = filtered_df.groupby(
+            "category"
+        )["amount"].sum()
 
         c1, c2 = st.columns(2)
 
         with c1:
             st.write("### Category Distribution")
+
             fig1, ax1 = plt.subplots()
+            fig1.patch.set_facecolor("#111827")
+            ax1.set_facecolor("#111827")
+
             ax1.pie(
                 category_total,
                 labels=category_total.index,
                 autopct="%1.1f%%",
-                startangle=90
+                startangle=90,
+                textprops={"color": "white"}
             )
+
             ax1.axis("equal")
             st.pyplot(fig1)
 
         with c2:
             st.write("### Category Spending")
+
             fig2, ax2 = plt.subplots()
+            fig2.patch.set_facecolor("#111827")
+            ax2.set_facecolor("#111827")
+
             ax2.bar(category_total.index, category_total.values)
-            ax2.set_xlabel("Category")
-            ax2.set_ylabel("Amount (₹)")
+            ax2.set_xlabel("Category", color="white")
+            ax2.set_ylabel("Amount (₹)", color="white")
+            ax2.tick_params(colors="white")
             plt.xticks(rotation=45)
+
             st.pyplot(fig2)
 
         st.write("### Spending Over Time")
@@ -420,13 +487,20 @@ else:
         )["amount"].sum().sort_index()
 
         fig3, ax3 = plt.subplots()
+        fig3.patch.set_facecolor("#111827")
+        ax3.set_facecolor("#111827")
+
         ax3.plot(daily_total.index, daily_total.values, marker="o")
-        ax3.set_xlabel("Date")
-        ax3.set_ylabel("Amount (₹)")
+        ax3.set_xlabel("Date", color="white")
+        ax3.set_ylabel("Amount (₹)", color="white")
+        ax3.tick_params(colors="white")
         plt.xticks(rotation=45)
+
         st.pyplot(fig3)
 
-    # ---------------- EDIT ----------------
+    # -------------------------------------------------
+    # EDIT EXPENSE
+    # -------------------------------------------------
     st.divider()
     st.subheader("✏️ Edit an Expense")
 
@@ -495,7 +569,9 @@ else:
         else:
             st.warning("Enter a valid name and amount.")
 
-    # ---------------- DELETE ----------------
+    # -------------------------------------------------
+    # DELETE / CLEAR
+    # -------------------------------------------------
     st.divider()
     st.subheader("🗑 Manage Expenses")
 
@@ -520,6 +596,7 @@ else:
     with d2:
         st.write("")
         st.write("")
+
         if st.button("⚠️ Clear All Expenses", use_container_width=True):
             clear_all_expenses()
             st.success("All expenses cleared.")
