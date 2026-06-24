@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+from datetime import date
 
 st.title("💰 Expense Tracker")
 
@@ -16,6 +17,8 @@ category = st.selectbox(
     ["Food", "Travel", "Shopping", "Bills", "Entertainment", "Other"]
 )
 
+expense_date = st.date_input("Expense date", value=date.today())
+
 amount = st.number_input("Amount (₹)", min_value=0.0, step=1.0)
 
 if st.button("Add Expense"):
@@ -24,6 +27,7 @@ if st.button("Add Expense"):
             {
                 "name": name,
                 "category": category,
+                "date": expense_date,
                 "amount": amount
             }
         )
@@ -43,6 +47,13 @@ else:
 
     total = df["amount"].sum()
     st.subheader(f"Total expense: ₹{total:.2f}")
+
+    st.download_button(
+        label="Download expenses as CSV",
+        data=df.to_csv(index=False).encode("utf-8"),
+        file_name="my_expenses.csv",
+        mime="text/csv"
+    )
 
     st.subheader("Expenses by category")
 
