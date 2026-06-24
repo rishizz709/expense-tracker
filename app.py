@@ -12,7 +12,9 @@ amount = st.number_input("Amount (₹)", min_value=0.0, step=1.0)
 
 if st.button("Add Expense"):
     if name != "" and amount > 0:
-        st.session_state.expenses.append({"name": name, "amount": amount})
+        st.session_state.expenses.append(
+            {"name": name, "amount": amount}
+        )
         st.success("Expense added successfully!")
     else:
         st.warning("Enter an expense name and amount.")
@@ -25,7 +27,9 @@ else:
     total = 0
 
     for i, expense in enumerate(st.session_state.expenses):
-        st.write(f"{i + 1}. {expense['name']} — ₹{expense['amount']:.2f}")
+        st.write(
+            f"{i + 1}. {expense['name']} — ₹{expense['amount']:.2f}"
+        )
         total = total + expense["amount"]
 
     st.subheader(f"Total expense: ₹{total:.2f}")
