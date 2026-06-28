@@ -1,3 +1,5 @@
+from components.navbar import show_navbar
+from components.sidebar import show_sidebar
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -174,6 +176,8 @@ def login_screen():
                 email = st.text_input("Email", key="login_email")
                 password = st.text_input("Password", type="password", key="login_password")
                 login_button = st.form_submit_button("Login", use_container_width=True)
+                if st.button("Forgot Password?"):
+                      st.session_state["forgot_password"]= True
 
             if login_button:
                 try:
@@ -218,41 +222,47 @@ def login_screen():
                         st.error(f"Could not create account: {error}")
 
         st.caption("Secure login • Your financial data is private to your account")
+    # -------------------------------
+# Forgot Password
+# -------------------------------
+    if st.button("Forgot Password?"):
+       st.session_state["forgot_password"] = True
+
+    if st.session_state.get("forgot_password", False):
+       email_reset = st.text_input("Enter your email")
+
+    if st.button("Send Reset Link"):
+        try:
+            supabase.auth.reset_password_email(
+                email_reset,
+                {
+                    "redirect_to": "https://EXPENSE-FLOW-streamlit.app"
+                }
+            )
+            st.success("Password reset email sent.")
+        except Exception as e:
+            st.error(str(e))
 
 
 # ---------------------------------------------------
 # MAIN APP
 # ---------------------------------------------------
 def main_app(user):
+    user_name = user.user_metadata.get("full_name", "Rishi")
+    show_navbar(user_name)
+
     create_profile_if_missing(user)
 
     full_name = user.user_metadata.get("full_name", "Friend")
     first_name = full_name.split()[0] if full_name else "Friend"
 
-    with st.sidebar:
-        st.markdown("## 💰 ExpenseFlow")
-        st.caption(f"Signed in as {user.email}")
-        st.divider()
+    page = show_sidebar(user.email)
+    st.write("Current Page:", page)
+    
 
-        page = st.radio(
-            "Navigation",
-            ["Dashboard", "Add transaction", "Transactions", "Savings goals", "Insights"]
-        )
-
-        st.divider()
-        if st.button("Logout", use_container_width=True):
-            supabase.auth.sign_out()
-            st.rerun()
-
-        st.markdown("""
-        <div class="footer">
-            Made by Rishi<br>
-            <a href="https://github.com/rishizz709" target="_blank">
-                github.com/rishizz709
-            </a>
-        </div>
-        """, unsafe_allow_html=True)
-
+    if page == "Logout":
+        supabase.auth.sign_out()
+        st.rerun()
     df = load_transactions(user.id)
     goals_df = load_goals(user.id)
 
@@ -382,7 +392,7 @@ def main_app(user):
             recent["amount"] = recent["amount"].apply(format_money)
             st.dataframe(recent, use_container_width=True, hide_index=True)
 
-    elif page == "Add transaction":
+    elif page == "Add Transaction":
         st.markdown("""
         <div class="hero">
             <h1>Add a transaction</h1>
@@ -500,7 +510,7 @@ def main_app(user):
                     except Exception as error:
                         st.error(f"Could not delete transaction: {error}")
 
-    elif page == "Savings goals":
+    elif page == "Goals":
         st.markdown("""
         <div class="hero">
             <h1>Savings goals</h1>
@@ -586,7 +596,7 @@ def main_app(user):
                         except Exception as error:
                             st.error(f"Could not delete goal: {error}")
 
-    elif page == "Insights":
+    elif page == "Analytics":
         st.markdown("""
         <div class="hero">
             <h1>Money insights</h1>
@@ -672,7 +682,22 @@ def main_app(user):
                 - Create one small savings goal before creating a large one.
                 - Keep a small emergency amount separate from daily spending.
                 """)
+    elif page == "AI Advisor":
+         st.markdown("## 🤖 AI Advisor")
+         st.info("AI Advisor coming soon!")
 
+    elif page == "Settings":
+         st.markdown("## ⚙️ Settings")
+         st.write(f"Logged in as: {user.email}")
+
+         st.markdown("---")
+         st.markdown("""
+### 👨‍💻 Developer
+
+Made by **Rishi**
+
+GitHub: https://github.com/rishizz709
+""")
 
 # ---------------------------------------------------
 # RUN APP

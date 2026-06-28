@@ -2,3 +2,6 @@ streamlit
 supabase
 pandas
 plotly
+streamlit-option-menu
+streamlit-lottie
+Pillow
