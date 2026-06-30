@@ -134,6 +134,21 @@ def load_transactions(user_id):
     return pd.DataFrame(response.data)
 
 
+def load_budget(user_id, month):
+    response = (
+        supabase.table("budgets")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("month", month)
+        .execute()
+    )
+
+    if response.data:
+        return response.data[0]
+
+    return None
+
+
 def load_goals(user_id):
     response = (
         supabase.table("goals")
@@ -142,8 +157,8 @@ def load_goals(user_id):
         .order("created_at", desc=True)
         .execute()
     )
-    return pd.DataFrame(response.data)
 
+    return pd.DataFrame(response.data)
 
 def create_profile_if_missing(user):
     try:
@@ -176,8 +191,7 @@ def login_screen():
                 email = st.text_input("Email", key="login_email")
                 password = st.text_input("Password", type="password", key="login_password")
                 login_button = st.form_submit_button("Login", use_container_width=True)
-                if st.button("Forgot Password?"):
-                      st.session_state["forgot_password"]= True
+                
 
             if login_button:
                 try:
@@ -189,6 +203,27 @@ def login_screen():
                     st.rerun()
                 except Exception as error:
                     st.error(f"Login failed: {error}")
+                    st.markdown("---")
+    st.subheader("Forgot Password")
+
+    reset_email = st.text_input(
+        "Enter your registered email",
+        key="reset_email"
+    )
+
+    if st.button("Send Reset Link", use_container_width=True):
+        try:
+            supabase.auth.reset_password_email(
+                reset_email,
+                {
+                    "redirect_to": "https://EXPENSE-FLOW-streamlit.app"
+                }
+            )
+
+            st.success("Password reset email sent. Check your inbox.")
+
+        except Exception as e:
+            st.error(str(e))
 
         with tab_signup:
             with st.form("signup_form"):
@@ -222,27 +257,6 @@ def login_screen():
                         st.error(f"Could not create account: {error}")
 
         st.caption("Secure login • Your financial data is private to your account")
-    # -------------------------------
-# Forgot Password
-# -------------------------------
-    if st.button("Forgot Password?"):
-       st.session_state["forgot_password"] = True
-
-    if st.session_state.get("forgot_password", False):
-       email_reset = st.text_input("Enter your email")
-
-    if st.button("Send Reset Link"):
-        try:
-            supabase.auth.reset_password_email(
-                email_reset,
-                {
-                    "redirect_to": "https://EXPENSE-FLOW-streamlit.app"
-                }
-            )
-            st.success("Password reset email sent.")
-        except Exception as e:
-            st.error(str(e))
-
 
 # ---------------------------------------------------
 # MAIN APP

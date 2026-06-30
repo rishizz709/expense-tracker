@@ -14,6 +14,7 @@ def show_sidebar(user_email):
                 "Dashboard",
                 "Add Transaction",
                 "Transactions",
+                "Budget",
                 "Analytics",
                 "Goals",
                 "AI Advisor",
@@ -23,6 +24,8 @@ def show_sidebar(user_email):
             icons=[
                 "house-fill",
                 "wallet2",
+                "receipt",
+                "cash-stack",
                 "bar-chart-fill",
                 "bullseye",
                 "robot",
